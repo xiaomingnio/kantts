@@ -167,46 +167,46 @@ class HybridAttentionDecoder(nn.Module):
         return pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask
 
     # must call reset_state before
-    def forward(
-        self, input, memory, x_band_width, h_band_width, mask=None, return_attns=False
-    ):
-        input = self.prenet(input)
-        input = torch.cat([memory, input], dim=-1)
-        input = self.dec_in_proj(input)
-
-        if mask is not None:
-            input = input.masked_fill(mask.unsqueeze(-1), 0)
-
-        input *= self.d_model ** 0.5
-        input = F.dropout(input, p=self.dropout, training=self.training)
-
-        max_len = input.size(1)
-        pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(
-            input.device, max_len, x_band_width, h_band_width, mask
-        )
-
-        dec_pnca_attn_x_list = []
-        dec_pnca_attn_h_list = []
-        dec_output = input
-        for id, layer in enumerate(self.pnca):
-            dec_output, dec_pnca_attn_x, dec_pnca_attn_h = layer(
-                dec_output,
-                memory,
-                mask=mask,
-                pnca_x_attn_mask=pnca_x_attn_mask,
-                pnca_h_attn_mask=pnca_h_attn_mask,
-            )
-            if return_attns:
-                dec_pnca_attn_x_list += [dec_pnca_attn_x]
-                dec_pnca_attn_h_list += [dec_pnca_attn_h]
-
-        dec_output = self.ln(dec_output)
-        dec_output = self.dec_out_proj(dec_output)
-
-        return dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list
+    # def forward(
+    #     self, input, memory, x_band_width, h_band_width, mask=None, return_attns=False
+    # ):
+    #     input = self.prenet(input)
+    #     input = torch.cat([memory, input], dim=-1)
+    #     input = self.dec_in_proj(input)
+    #
+    #     if mask is not None:
+    #         input = input.masked_fill(mask.unsqueeze(-1), 0)
+    #
+    #     input *= self.d_model ** 0.5
+    #     input = F.dropout(input, p=self.dropout, training=self.training)
+    #
+    #     max_len = input.size(1)
+    #     pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(
+    #         input.device, max_len, x_band_width, h_band_width, mask
+    #     )
+    #
+    #     dec_pnca_attn_x_list = []
+    #     dec_pnca_attn_h_list = []
+    #     dec_output = input
+    #     for id, layer in enumerate(self.pnca):
+    #         dec_output, dec_pnca_attn_x, dec_pnca_attn_h = layer(
+    #             dec_output,
+    #             memory,
+    #             mask=mask,
+    #             pnca_x_attn_mask=pnca_x_attn_mask,
+    #             pnca_h_attn_mask=pnca_h_attn_mask,
+    #         )
+    #         if return_attns:
+    #             dec_pnca_attn_x_list += [dec_pnca_attn_x]
+    #             dec_pnca_attn_h_list += [dec_pnca_attn_h]
+    #
+    #     dec_output = self.ln(dec_output)
+    #     dec_output = self.dec_out_proj(dec_output)
+    #
+    #     return dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list
 
     # must call reset_state before when step == 0
-    def infer(
+    def forward(
         self,
         step,
         input,
@@ -559,6 +559,7 @@ class MelPNCADecoder(nn.Module):
             self.mel_dec.reset_state()
             input = target[:, self.r - 1 :: self.r, :]
             input = torch.cat([go_frame, input], dim=1)[:, :-1, :]
+            t0 = time.time()
             dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list = self.mel_dec(
                 input,
                 memory,
@@ -567,6 +568,8 @@ class MelPNCADecoder(nn.Module):
                 mask=mask,
                 return_attns=return_attns,
             )
+            t1 = time.time()
+            # print("mel_dec infer time: ", t1-t0, " s")
 
         else:
             dec_output = []
@@ -574,12 +577,16 @@ class MelPNCADecoder(nn.Module):
             dec_pnca_attn_h_list = [[] for _ in range(self.nb_layers)]
             self.mel_dec.reset_state()
             input = go_frame
+            t0 = time.time()
+
             for step in range(memory.size(1)):
+                # print(step, input.shape, memory.shape, x_band_width, h_band_width, mask, return_attns)
+                t0 = time.time()
                 (
                     dec_output_step,
                     dec_pnca_attn_x_step,
                     dec_pnca_attn_h_step,
-                ) = self.mel_dec.infer(
+                ) = self.mel_dec(
                     step,
                     input,
                     memory,
@@ -602,6 +609,10 @@ class MelPNCADecoder(nn.Module):
                         pnca_x_attn = torch.cat([pnca_x_attn, padding], dim=-1)
                     dec_pnca_attn_x_list[layer_id].append(pnca_x_attn)
                     dec_pnca_attn_h_list[layer_id].append(pnca_h_attn)
+                t1 = time.time()
+                # print("per mel_dec infer time: ", t1 - t0, " s")
+            t1 = time.time()
+            # print("mel_dec infer time: ", t1-t0, " s")
             dec_output = torch.cat(dec_output, dim=1)
             for layer_id in range(self.nb_layers):
                 dec_pnca_attn_x_list[layer_id] = torch.cat(
@@ -998,6 +1009,12 @@ class KanTtsSAMBERT(nn.Module):
             h_band_width = x_band_width
 
         t0 = time.time()
+        # print(memory.shape, x_band_width, h_band_width, mel_targets, lfr_masks)
+        # 数据存储
+        # import numpy as np
+        # memory_np = memory.detach().cpu().numpy()
+        # np.save("./save_data/memory_np.npy", memory_np)
+
         dec_outputs, pnca_x_attn_lst, pnca_h_attn_lst = self.mel_decoder(
             memory,
             x_band_width,
@@ -1006,8 +1023,14 @@ class KanTtsSAMBERT(nn.Module):
             mask=lfr_masks,
             return_attns=True,
         )
+        # print(dec_outputs, pnca_x_attn_lst, pnca_h_attn_lst)
+        # dec_outputs_np = dec_outputs.detach().cpu().numpy()
+        # np.save("./save_data/dec_outputs_np.npy", dec_outputs_np)
+
+
+
         t1 = time.time()
-        print("mel_decoder infer time: ", t1 - t0)
+        # print("mel_decoder infer time: ", t1 - t0)
 
         # De-LFR with the factor of outputs_per_step
         dec_outputs = dec_outputs.contiguous().view(

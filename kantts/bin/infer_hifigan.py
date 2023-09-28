@@ -39,7 +39,8 @@ def load_model(ckpt, config=None):
 
     # lazy load for circular error
     from kantts.models.hifigan.hifigan import Generator
-
+    print("------- config -----------")
+    print(config["Model"]["Generator"]["params"])
     model = Generator(**config["Model"]["Generator"]["params"])
     states = torch.load(ckpt, map_location="cpu")
     model.load_state_dict(states["model"]["generator"])
@@ -87,7 +88,6 @@ def hifigan_init(ckpt_path, config=None):
 
 
 
-
     model = load_model(ckpt_path, config)
 
     logging.info(f"Loaded model parameters from {ckpt_path}.")
@@ -97,80 +97,85 @@ def hifigan_init(ckpt_path, config=None):
     return model
 
 
-
-def hifigan_forward(input_mel, model, output_dir):
-    # check directory existence
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    logging_to_file(os.path.join(output_dir, "stdout.log"))
-
-    if not torch.cuda.is_available():
-        device = torch.device("cpu")
-    else:
-        torch.backends.cudnn.benchmark = True
-        device = torch.device("cuda", 0)
-    if os.path.isfile(input_mel):
-        mel_lst = [input_mel]
-    elif os.path.isdir(input_mel):
-        mel_lst = glob.glob(os.path.join(input_mel, "*.npy"))
-    else:
-        raise ValueError("input_mel should be a file or a directory")
-
-    with torch.no_grad():
-        start = time.time()
-        pcm_len = 0
-        for mel in mel_lst:
-            utt_id = os.path.splitext(os.path.basename(mel))[0]
-            mel_data = np.load(mel)
-            if model.nsf_enable:
-                mel_data = binarize(mel_data)
-            # generate
-            mel_data = torch.tensor(mel_data, dtype=torch.float).to(device)
-            # (T, C) -> (B, C, T)
-            mel_data = mel_data.transpose(1, 0).unsqueeze(0)
-            y = model(mel_data)
-            if hasattr(model, "pqmf"):
-                y = model.pqmf.synthesis(y)
-            y = y.view(-1).cpu().numpy()
-            pcm_len += len(y)
-
-            # save as PCM 16 bit wav file
-            sf.write(
-                os.path.join(output_dir, f"{utt_id}_gen.wav"),
-                y,
-                16000,
-                "PCM_16",
-            )
-        rtf = (time.time() - start) / (
-                pcm_len / 16000
-        )
-
-        # report average RTF
-    # logging.info(
-    #     f"Finished generation of {len(mel_lst)} utterances (RTF = {rtf:.03f})."
-    # )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Infer hifigan model")
-    parser.add_argument(
-        "--ckpt", type=str, required=True, help="Path to model checkpoint"
-    )
-    parser.add_argument(
-        "--input_mel",
-        type=str,
-        required=True,
-        help="Path to input mel file or directory containing mel files",
-    )
-    parser.add_argument(
-        "--output_dir", type=str, required=True, help="Path to output directory"
-    )
-    parser.add_argument("--config", type=str, default=None, help="Path to config file")
-    args = parser.parse_args()
-    hifigan_infer(
-        args.input_mel,
-        args.ckpt,
-        args.output_dir,
-        args.config,
-    )
+# def hifigan_forward(input_mel, model, output_dir):
+#     # check directory existence
+#     if not os.path.exists(output_dir):
+#         os.makedirs(output_dir)
+#
+#     logging_to_file(os.path.join(output_dir, "stdout.log"))
+#
+#     if not torch.cuda.is_available():
+#         device = torch.device("cpu")
+#     else:
+#         torch.backends.cudnn.benchmark = True
+#         device = torch.device("cuda", 0)
+#     if os.path.isfile(input_mel):
+#         mel_lst = [input_mel]
+#     elif os.path.isdir(input_mel):
+#         mel_lst = glob.glob(os.path.join(input_mel, "*.npy"))
+#     else:
+#         raise ValueError("input_mel should be a file or a directory")
+#
+#     with torch.no_grad():
+#         start = time.time()
+#         pcm_len = 0
+#         for mel in mel_lst:
+#             utt_id = os.path.splitext(os.path.basename(mel))[0]
+#             mel_data = np.load(mel)
+#
+#
+#             # print("=====model.nsf_enable: ", model.nsf_enable)
+#             # if model.nsf_enable:
+#             #     mel_data = binarize(mel_data)
+#             # generate
+#             mel_data = torch.tensor(mel_data, dtype=torch.float).to(device)
+#             # (T, C) -> (B, C, T)
+#             mel_data = mel_data.transpose(1, 0).unsqueeze(0)
+#             y = model(mel_data)
+#             if hasattr(model, "pqmf"):
+#                 y = model.pqmf.synthesis(y)
+#             y = y.view(-1).cpu().numpy()
+#             pcm_len += len(y)
+#
+#             # save as PCM 16 bit wav file
+#             t0 = time.time()
+#             sf.write(
+#                 os.path.join(output_dir, f"{utt_id}_gen.wav"),
+#                 y,
+#                 16000,
+#                 "PCM_16",
+#             )
+#             t1 = time.time()
+#             # print("sf.write time: ", t1-t0)
+#         rtf = (time.time() - start) / (
+#                 pcm_len / 16000
+#         )
+#
+#         # report average RTF
+#     # logging.info(
+#     #     f"Finished generation of {len(mel_lst)} utterances (RTF = {rtf:.03f})."
+#     # )
+#
+#
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(description="Infer hifigan model")
+#     parser.add_argument(
+#         "--ckpt", type=str, required=True, help="Path to model checkpoint"
+#     )
+#     parser.add_argument(
+#         "--input_mel",
+#         type=str,
+#         required=True,
+#         help="Path to input mel file or directory containing mel files",
+#     )
+#     parser.add_argument(
+#         "--output_dir", type=str, required=True, help="Path to output directory"
+#     )
+#     parser.add_argument("--config", type=str, default=None, help="Path to config file")
+#     args = parser.parse_args()
+#     hifigan_infer(
+#         args.input_mel,
+#         args.ckpt,
+#         args.output_dir,
+#         args.config,
+#     )

@@ -116,40 +116,41 @@ class Generator(torch.nn.Module):
             padding=(kernel_size - 1) // 2,
         )
 
-        if self.nsf_enable:
-            self.source_module = SourceModule(
-                nb_harmonics=nsf_params["nb_harmonics"],
-                upsample_ratio=np.cumprod(self.upsample_scales)[-1],
-                sampling_rate=nsf_params["sampling_rate"],
-            )
-            self.source_downs = nn.ModuleList()
-            self.downsample_rates = [1] + self.upsample_scales[::-1][:-1]
-            self.downsample_cum_rates = np.cumprod(self.downsample_rates)
-
-            for i, u in enumerate(self.downsample_cum_rates[::-1]):
-                if u == 1:
-                    self.source_downs.append(
-                        Conv1d(1, channels // (2 ** (i + 1)), 1, 1)
-                    )
-                else:
-                    self.source_downs.append(
-                        conv_cls(
-                            1,
-                            channels // (2 ** (i + 1)),
-                            u * 2,
-                            u,
-                            padding=u // 2,
-                        )
-                    )
+        # if self.nsf_enable:
+        #     self.source_module = SourceModule(
+        #         nb_harmonics=nsf_params["nb_harmonics"],
+        #         upsample_ratio=np.cumprod(self.upsample_scales)[-1],
+        #         sampling_rate=nsf_params["sampling_rate"],
+        #     )
+        #     self.source_downs = nn.ModuleList()
+        #     self.downsample_rates = [1] + self.upsample_scales[::-1][:-1]
+        #     self.downsample_cum_rates = np.cumprod(self.downsample_rates)
+        #
+        #     for i, u in enumerate(self.downsample_cum_rates[::-1]):
+        #         if u == 1:
+        #             self.source_downs.append(
+        #                 Conv1d(1, channels // (2 ** (i + 1)), 1, 1)
+        #             )
+        #         else:
+        #             self.source_downs.append(
+        #                 conv_cls(
+        #                     1,
+        #                     channels // (2 ** (i + 1)),
+        #                     u * 2,
+        #                     u,
+        #                     padding=u // 2,
+        #                 )
+        #             )
 
     def forward(self, x):
-        if self.nsf_enable:
-            mel = x[:, :-2, :]
-            pitch = x[:, -2:-1, :]
-            uv = x[:, -1:, :]
-            excitation = self.source_module(pitch, uv)
-        else:
-            mel = x
+        # if self.nsf_enable:
+        #     print("---------------------------")
+        #     mel = x[:, :-2, :]
+        #     pitch = x[:, -2:-1, :]
+        #     uv = x[:, -1:, :]
+        #     excitation = self.source_module(pitch, uv)
+        # else:
+        mel = x
 
         x = self.conv_pre(mel)
         for i in range(self.num_upsamples):
@@ -159,13 +160,13 @@ class Generator(torch.nn.Module):
             # transconv
             up = self.transpose_upsamples[i](x)
 
-            if self.nsf_enable:
-                # Downsampling the excitation signal
-                e = self.source_downs[i](excitation)
-                # augment inputs with the excitation
-                x = rep + e + up[:, :, : rep.shape[-1]]
-            else:
-                x = rep + up[:, :, : rep.shape[-1]]
+            # if self.nsf_enable:
+            #     # Downsampling the excitation signal
+            #     e = self.source_downs[i](excitation)
+            #     # augment inputs with the excitation
+            #     x = rep + e + up[:, :, : rep.shape[-1]]
+            # else:
+            x = rep + up[:, :, : rep.shape[-1]]
 
             xs = None
             for j in range(self.num_kernels):

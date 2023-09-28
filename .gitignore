@@ -1,0 +1,4 @@
+outputs/
+tensorrt_onnx/model_save/
+*__pycache__/
+whisper_small/

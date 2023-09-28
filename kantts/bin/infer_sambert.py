@@ -113,7 +113,7 @@ def am_synthesis(symbol_seq, fsnet, ling_unit, device, se=None, scale=1.0):
         torch.zeros(1).to(device).long() + inputs_emo.size(1) - 1
     )  # minus 1 for "~"
 
-    t0 = time.time()
+    # t0 = time.time()
     res = fsnet(
         inputs_ling[:, :-1, :],
         inputs_emo[:, :-1],
@@ -121,8 +121,9 @@ def am_synthesis(symbol_seq, fsnet, ling_unit, device, se=None, scale=1.0):
         inputs_len,
         scale=scale
     )
-    t1 = time.time()
-    print("fsnet infer time: ", t1-t0)
+    # print(inputs_ling[:, :-1, :].shape, inputs_emo[:, :-1].shape, inputs_spk.shape, inputs_len.shape)
+    # t1 = time.time()
+    # print("fsnet infer time: ", t1-t0)
 
     x_band_width = res["x_band_width"]
     h_band_width = res["h_band_width"]
@@ -138,7 +139,7 @@ def am_synthesis(symbol_seq, fsnet, ling_unit, device, se=None, scale=1.0):
 
     valid_length = int(LR_length_rounded[0].item())
     dec_outputs = dec_outputs[0, :valid_length, :].cpu().numpy()
-    postnet_outputs = postnet_outputs[0, :valid_length, :].cpu().numpy()
+    postnet_outputs = postnet_outputs[0, :valid_length, :]#.cpu().numpy()
     duration_predictions = (
         (torch.exp(log_duration_predictions) - 1 + 0.5).long().squeeze().cpu().numpy()
     )
@@ -193,82 +194,89 @@ def am_init(ckpt, config=None):
 
 
 
-def am_forward(ckpt, sentence, model, output_dir, se_file=None, config=None, scale=1.0):
-    results_dir = os.path.join(output_dir, "feat")
-    os.makedirs(results_dir, exist_ok=True)
-
-    fsnet = model
-    # results_dir = os.path.join(output_dir, "feat")
-
-    if config is not None:
-        with open(config, "r") as f:
-            config = yaml.load(f, Loader=yaml.Loader)
-    else:
-        am_config_file = os.path.join(
-            ckpt, "config.yaml"
-        )
-        with open(am_config_file, "r") as f:
-            config = yaml.load(f, Loader=yaml.Loader)
-    ling_unit = KanTtsLinguisticUnit(config)
-    ling_unit_size = ling_unit.get_unit_size()
-    config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
-    se_enable = config["Model"]["KanTtsSAMBERT"]["params"].get("SE", False)
-    se = np.load(se_file) if se_enable else None
-
-    ling_unit = KanTtsLinguisticUnit(config)
-    ling_unit_size = ling_unit.get_unit_size()
-    config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
-
-    # nsf
-    nsf_enable = config["Model"]["KanTtsSAMBERT"]["params"].get("NSF", False)
-    if nsf_enable:
-        nsf_norm_type = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_norm_type", "mean_std")
-        if nsf_norm_type == "mean_std":
-            f0_mvn_file = os.path.join(
-                os.path.dirname(os.path.dirname(ckpt)), "mvn.npy"
-            )
-            f0_feature = np.load(f0_mvn_file)
-        else: # global
-            nsf_f0_global_minimum = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_f0_global_minimum", 30.0)
-            nsf_f0_global_maximum = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_f0_global_maximum", 730.0)
-            f0_feature = [nsf_f0_global_maximum, nsf_f0_global_minimum]
-
-    if not torch.cuda.is_available():
-        device = torch.device("cpu")
-    else:
-        torch.backends.cudnn.benchmark = True
-        device = torch.device("cuda", 0)
-
-    with open(sentence, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip().split("\t")
-            # logging.info("Inference sentence: {}".format(line[0]))
-            mel_path = "%s/%s_mel.npy" % (results_dir, line[0])
-            dur_path = "%s/%s_dur.txt" % (results_dir, line[0])
-            f0_path = "%s/%s_f0.txt" % (results_dir, line[0])
-            energy_path = "%s/%s_energy.txt" % (results_dir, line[0])
-
-            with torch.no_grad():
-                mel, mel_post, dur, f0, energy = am_synthesis(
-                    line[1], fsnet, ling_unit, device, se=se, scale=scale
-                )
-
-            if nsf_enable:
-                mel_post = denorm_f0(mel_post, norm_type=nsf_norm_type, f0_feature=f0_feature)
-
-            np.save(mel_path, mel_post)
-            np.savetxt(dur_path, dur)
-            np.savetxt(f0_path, f0)
-            np.savetxt(energy_path, energy)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--sentence", type=str, required=True)
-    parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--ckpt", type=str, required=True)
-    parser.add_argument("--se_file", type=str, required=False)
-
-    args = parser.parse_args()
-
-    am_infer(args.sentence, args.ckpt, args.output_dir, args.se_file)
+# def am_forward(ckpt, sentence, model, output_dir, se_file=None, config=None, scale=1.0):
+#     results_dir = os.path.join(output_dir, "feat")
+#     os.makedirs(results_dir, exist_ok=True)
+#
+#     fsnet = model
+#     # results_dir = os.path.join(output_dir, "feat")
+#
+#     if config is not None:
+#         with open(config, "r") as f:
+#             config = yaml.load(f, Loader=yaml.Loader)
+#     else:
+#         am_config_file = os.path.join(
+#             ckpt, "config.yaml"
+#         )
+#         with open(am_config_file, "r") as f:
+#             config = yaml.load(f, Loader=yaml.Loader)
+#     ling_unit = KanTtsLinguisticUnit(config)
+#     ling_unit_size = ling_unit.get_unit_size()
+#     config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
+#     se_enable = config["Model"]["KanTtsSAMBERT"]["params"].get("SE", False)
+#     print("se_enable: ", se_enable)
+#     se = np.load(se_file) if se_enable else None
+#
+#     ling_unit = KanTtsLinguisticUnit(config)
+#     ling_unit_size = ling_unit.get_unit_size()
+#     config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
+#
+#     # nsf
+#     nsf_enable = config["Model"]["KanTtsSAMBERT"]["params"].get("NSF", False)
+#     print("nsf_enable: ", nsf_enable)
+#     if nsf_enable:
+#         nsf_norm_type = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_norm_type", "mean_std")
+#         if nsf_norm_type == "mean_std":
+#             f0_mvn_file = os.path.join(
+#                 os.path.dirname(os.path.dirname(ckpt)), "mvn.npy"
+#             )
+#             f0_feature = np.load(f0_mvn_file)
+#         else: # global
+#             nsf_f0_global_minimum = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_f0_global_minimum", 30.0)
+#             nsf_f0_global_maximum = config["Model"]["KanTtsSAMBERT"]["params"].get("nsf_f0_global_maximum", 730.0)
+#             f0_feature = [nsf_f0_global_maximum, nsf_f0_global_minimum]
+#
+#     if not torch.cuda.is_available():
+#         device = torch.device("cpu")
+#     else:
+#         torch.backends.cudnn.benchmark = True
+#         device = torch.device("cuda", 0)
+#
+#     with open(sentence, encoding="utf-8") as f:
+#         for line in f:
+#             line = line.strip().split("\t")
+#             # logging.info("Inference sentence: {}".format(line[0]))
+#             mel_path = "%s/%s_mel.npy" % (results_dir, line[0])
+#             dur_path = "%s/%s_dur.txt" % (results_dir, line[0])
+#             f0_path = "%s/%s_f0.txt" % (results_dir, line[0])
+#             energy_path = "%s/%s_energy.txt" % (results_dir, line[0])
+#
+#             t0 = time.time()
+#             with torch.no_grad():
+#                 mel, mel_post, dur, f0, energy = am_synthesis(
+#                     line[1], fsnet, ling_unit, device, se=se, scale=scale
+#                 )
+#             t1 = time.time()
+#
+#             if nsf_enable:
+#                 mel_post = denorm_f0(mel_post, norm_type=nsf_norm_type, f0_feature=f0_feature)
+#             t1 = time.time()
+#             np.save(mel_path, mel_post)
+#             np.savetxt(dur_path, dur)
+#             np.savetxt(f0_path, f0)
+#             np.savetxt(energy_path, energy)
+#
+#             t2 = time.time()
+#             print("save mel time: ", t2-t1)
+#
+#
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--sentence", type=str, required=True)
+#     parser.add_argument("--output_dir", type=str, required=True)
+#     parser.add_argument("--ckpt", type=str, required=True)
+#     parser.add_argument("--se_file", type=str, required=False)
+#
+#     args = parser.parse_args()
+#
+#     am_infer(args.sentence, args.ckpt, args.output_dir, args.se_file)

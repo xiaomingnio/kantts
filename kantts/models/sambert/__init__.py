@@ -225,6 +225,7 @@ class MultiHeadPNCAAttention(nn.Module):
         x_k = x_k.permute(2, 0, 1, 3).contiguous().view(-1, len_x, d_head)
         x_v = x_v.permute(2, 0, 1, 3).contiguous().view(-1, len_x, d_head)
 
+        # print("self.x_state_size: ", self.x_state_size)
         if self.x_state_size:
             self.x_k = torch.cat([self.x_k, x_k], dim=1)
             self.x_v = torch.cat([self.x_v, x_v], dim=1)
@@ -237,9 +238,11 @@ class MultiHeadPNCAAttention(nn.Module):
         return x_q, x_k, x_v
 
     def update_h_state(self, h):
+        # print("self.h_state_size == h.size(1): ", self.h_state_size , h.size(1))
         if self.h_state_size == h.size(1):
+            # print("-----------------------")
             return None, None
-
+        # print("========================")
         d_head, n_head = self.d_head, self.n_head
 
         # H
@@ -268,6 +271,7 @@ class MultiHeadPNCAAttention(nn.Module):
 
     def forward(self, x, h, mask_x=None, mask_h=None):
         residual = x
+        # print("self.h_state_size: ", self.h_state_size)
         self.update_h_state(h)
         x_q, x_k, x_v = self.update_x_state(self.layer_norm(x))
 
