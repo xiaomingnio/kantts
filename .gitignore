@@ -3,3 +3,5 @@ tensorrt_onnx/model_save/
 *__pycache__/
 whisper_small/
 kantts/__pycache__/
+kantts/*/__pycache__/
+
