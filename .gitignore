@@ -4,4 +4,4 @@ tensorrt_onnx/model_save/
 whisper_small/
 kantts/__pycache__/
 kantts/*/__pycache__/
-
+.idea/

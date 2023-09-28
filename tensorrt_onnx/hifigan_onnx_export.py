@@ -6,7 +6,11 @@ import yaml
 import logging
 from kantts.models.hifigan.hifigan import Generator
 
-basepath = "/home/zhaoming/.cache/modelscope/hub/damo/speech_sambert-hifigan_tts_zh-cn_16k"
+from os.path import expanduser
+home_directory = expanduser("~")
+print(home_directory)
+
+basepath = f"{home_directory}/.cache/modelscope/hub/damo/speech_sambert-hifigan_tts_zh-cn_16k"
 voice = "zhizhe_emo"  # zhizhe_emo 男声  zhitian_emo  女生
 save_path = "./model_save"
 if not os.path.exists(save_path):
