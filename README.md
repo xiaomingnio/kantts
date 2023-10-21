@@ -10,13 +10,30 @@ TTS appalication based on modelscope KAN-TTS
   
   1.HifiGAN tensorrt加速
   
-  2.sambert tensorrt加速（TODO）
+  2.sambert tensorrt加速
+
+## HifiGAN tensorrt加速
+```
+cd tensorrt_onnx
+# 导出hifigan onnx
+python hifigan_onnx_export.py 
+# 利用trt.OnnxParser生成engine
+python build_from_onnx.py
+```
+本项目原始模型直接利用modelscope下载
+```
+from modelscope.utils.constant import Tasks
+model_id = 'damo/speech_sambert-hifigan_tts_zh-cn_16k'
+sambert_hifigan_tts = pipeline(task=Tasks.text_to_speech, model=model_id)
+text = "你好"
+output = sambert_hifigan_tts(input=text, voice="zhitian_emo")  # zhibei_emo  zhitian_emo zhiyan_emo  zhizhe_emo
+```
 
 ## sambert tensorrt加速
-1、统计sambert各个模块耗时，发现主要耗时都集中在MelPNCADecoder；
-2、将MelPNCADecoder部分由一个循环的mel_dec函数组成；
+1、统计sambert各个模块耗时，发现主要耗时都集中在MelPNCADecoder； 
+2、将MelPNCADecoder部分由一个循环的mel_dec函数组成； 
 它在memory的第二个维度上循环调用，下一次调用会依赖上一次的结果
-3、将mel_dec函数利用tensorrt python api重写，因为mel_del的调用会依赖上一次mel_del的中间变量和输出结果，故修改该函数输入输出，将需要的中间结果都输入到下一次调用；
+3、将mel_dec函数利用tensorrt python api重写，因为mel_del的调用会依赖上一次mel_del的中间变量和输出结果，故修改该函数输入输出，将需要的中间结果都输入到下一次调用； 
 
 step=0时和step>0时的输入不一致，所有只对step>0时的推理部分进行tensorrt搭建。
 
