@@ -5,7 +5,7 @@ TTS appalication based on modelscope KAN-TTS
 `python demo.py`
 
 ## Features - 特性
-- 增加语速调节
+- 增加语速调节，scale参数调节
 - 推理加速
   
   1.HifiGAN tensorrt加速
