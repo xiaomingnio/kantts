@@ -30,6 +30,7 @@ output = sambert_hifigan_tts(input=text, voice="zhitian_emo")  # zhibei_emo  zhi
 ```
 
 ## sambert tensorrt加速
+ps. 主要思路来自kantts群的大佬
 1、统计sambert各个模块耗时，发现主要耗时都集中在MelPNCADecoder； 
 2、将MelPNCADecoder部分由一个循环的mel_dec函数组成； 
 它在memory的第二个维度上循环调用，下一次调用会依赖上一次的结果
