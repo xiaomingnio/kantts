@@ -30,11 +30,11 @@ output = sambert_hifigan_tts(input=text, voice="zhitian_emo")  # zhibei_emo  zhi
 ```
 
 ## sambert tensorrt加速
-ps. 主要思路来自kantts群的大佬
-1、统计sambert各个模块耗时，发现主要耗时都集中在MelPNCADecoder； 
-2、将MelPNCADecoder部分由一个循环的mel_dec函数组成； 
-它在memory的第二个维度上循环调用，下一次调用会依赖上一次的结果
-3、将mel_dec函数利用tensorrt python api重写，因为mel_del的调用会依赖上一次mel_del的中间变量和输出结果，故修改该函数输入输出，将需要的中间结果都输入到下一次调用； 
+ps. 主要思路来自kantts群的大佬  
+1、统计sambert各个模块耗时，发现主要耗时都集中在MelPNCADecoder；   
+2、将MelPNCADecoder部分由一个循环的mel_dec函数组成；   
+它在memory的第二个维度上循环调用，下一次调用会依赖上一次的结果  
+3、将mel_dec函数利用tensorrt python api重写，因为mel_del的调用会依赖上一次mel_del的中间变量和输出结果，故修改该函数输入输出，将需要的中间结果都输入到下一次调用；   
 
 step=0时和step>0时的输入不一致，所有只对step>0时的推理部分进行tensorrt搭建。
 
