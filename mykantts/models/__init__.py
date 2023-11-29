@@ -1,15 +1,15 @@
 import torch
 from torch.nn.parallel import DistributedDataParallel
-from kantts.models.hifigan.hifigan import (  # NOQA
+from mykantts.models.hifigan.hifigan import (  # NOQA
     Generator,  # NOQA
     MultiScaleDiscriminator,  # NOQA
     MultiPeriodDiscriminator,  # NOQA
     MultiSpecDiscriminator,  # NOQA
 )
-import kantts
-import kantts.train.scheduler
-from kantts.models.sambert.kantts_sambert import KanTtsSAMBERT, KanTtsTextsyBERT  # NOQA
-from kantts.utils.ling_unit.ling_unit import get_fpdict
+import mykantts
+import mykantts.train.scheduler
+from mykantts.models.sambert.kantts_sambert import KanTtsSAMBERT, KanTtsTextsyBERT  # NOQA
+from mykantts.utils.ling_unit.ling_unit import get_fpdict
 from .pqmf import PQMF
 
 
@@ -20,7 +20,7 @@ def optimizer_builder(model_params, opt_name, opt_params):
 
 
 def scheduler_builder(optimizer, sche_name, sche_params):
-    scheduler_cls = getattr(kantts.train.scheduler, sche_name)
+    scheduler_cls = getattr(mykantts.train.scheduler, sche_name)
     scheduler = scheduler_cls(optimizer, **sche_params)
     return scheduler
 

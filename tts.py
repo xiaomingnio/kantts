@@ -8,9 +8,9 @@ import torch
 
 from tensorrt_onnx.run_onnx import ONNXModel
 from tensorrt_onnx.run_trt import TRTWrapper
-from kantts.bin.infer_sambert import am_init, am_synthesis
-from kantts.bin.infer_hifigan import hifigan_init
-from kantts.utils.ling_unit.ling_unit import KanTtsLinguisticUnit
+from mykantts.bin.infer_sambert import am_init, am_synthesis
+from mykantts.bin.infer_hifigan import hifigan_init
+from mykantts.utils.ling_unit.ling_unit import KanTtsLinguisticUnit
 import time
 import wave
 
@@ -100,7 +100,7 @@ class TTS():
         else:
             print("Wrong infer type......")
 
-        self.am_model = am_init(ckpt=os.path.join(self.am_ckpt, "ckpt/checkpoint_0.pth"), config=self.am_config)
+        self.am_model = am_init(ckpt=os.path.join(self.am_ckpt, "ckpt/checkpoint_0.pth"), config=self.am_config, infer_type=infer_type, voice=voice)
 
         self.fe = ttsfrd.TtsFrontendEngine()
         self.fe.initialize(self.resource_dir)

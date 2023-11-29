@@ -13,7 +13,7 @@ from .layers import (
     ResidualBlock,
     SourceModule,
 )
-from kantts.utils.audio_torch import stft
+from mykantts.utils.audio_torch import stft
 import copy
 
 is_pytorch_17plus = LooseVersion(torch.__version__) >= LooseVersion("1.7")

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from kantts.models.sambert.fsmn import FsmnEncoderV2
-from kantts.models.sambert import Prenet
+from mykantts.models.sambert.fsmn import FsmnEncoderV2
+from mykantts.models.sambert import Prenet
 
 
 class LengthRegulator(nn.Module):

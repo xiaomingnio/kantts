@@ -2,22 +2,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
+import numpy as np
 
-from kantts.models.sambert import FFTBlock, PNCABlock, Prenet
-from kantts.models.sambert.positions import (
+from mykantts.models.sambert import FFTBlock, PNCABlock, Prenet
+from mykantts.models.sambert.positions import (
     SinusoidalPositionEncoder,
     DurSinusoidalPositionEncoder,
 )
-from kantts.models.sambert.adaptors import (
+from mykantts.models.sambert.adaptors import (
     LengthRegulator,
     VarFsmnRnnNARPredictor,
     VarRnnARPredictor,
 )
-from kantts.models.sambert.fsmn import FsmnEncoderV2
-from kantts.models.sambert.alignment import b_mas
-from kantts.models.sambert.attention import ConvAttention
+from mykantts.models.sambert.fsmn import FsmnEncoderV2
+from mykantts.models.sambert.alignment import b_mas
+from mykantts.models.sambert.attention import ConvAttention
 
-from kantts.models.utils import get_mask_from_lengths
+from mykantts.models.utils import get_mask_from_lengths
 
 
 class SelfAttentionEncoder(nn.Module):
@@ -108,8 +109,10 @@ class HybridAttentionDecoder(nn.Module):
 
         self.d_model = d_model
         self.dropout = dropout
+        # print("self.prenet = Prenet(d_in, prenet_units, d_model): \n",  (d_in, prenet_units, d_model))
         self.prenet = Prenet(d_in, prenet_units, d_model)
         self.dec_in_proj = nn.Linear(d_model + d_mem, d_model)
+        # print("n_layer: ", n_layer)
         self.pnca = nn.ModuleList(
             [
                 PNCABlock(
@@ -127,6 +130,7 @@ class HybridAttentionDecoder(nn.Module):
             ]
         )
         self.ln = nn.LayerNorm(d_model, eps=1e-6)
+        # print("d_model, d_out: ", d_model, d_out)
         self.dec_out_proj = nn.Linear(d_model, d_out)
 
     def reset_state(self):
@@ -154,15 +158,16 @@ class HybridAttentionDecoder(nn.Module):
             (h_start <= range_[None, :, None]) & (h_end > range_[None, :, None])
         ).transpose(1, 2)
 
-        if pnca_attn_mask is not None:
-            pnca_x_attn_mask = pnca_x_attn_mask | pnca_attn_mask
-            pnca_h_attn_mask = pnca_h_attn_mask | pnca_attn_mask
-            pnca_x_attn_mask = pnca_x_attn_mask.masked_fill(
-                pnca_attn_mask.transpose(1, 2), False
-            )
-            pnca_h_attn_mask = pnca_h_attn_mask.masked_fill(
-                pnca_attn_mask.transpose(1, 2), False
-            )
+        # if pnca_attn_mask is not None:
+        #     print("--------------------------")
+        #     pnca_x_attn_mask = pnca_x_attn_mask | pnca_attn_mask
+        #     pnca_h_attn_mask = pnca_h_attn_mask | pnca_attn_mask
+        #     pnca_x_attn_mask = pnca_x_attn_mask.masked_fill(
+        #         pnca_attn_mask.transpose(1, 2), False
+        #     )
+        #     pnca_h_attn_mask = pnca_h_attn_mask.masked_fill(
+        #         pnca_attn_mask.transpose(1, 2), False
+        #     )
 
         return pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask
 
@@ -211,39 +216,79 @@ class HybridAttentionDecoder(nn.Module):
         step,
         input,
         memory,
-        x_band_width,
-        h_band_width,
+        memory_step,
+        pnca_x_attn_mask_step,
+        pnca_h_attn_mask_step,
         mask=None,
         return_attns=False,
+
     ):
+
+        # print("step: ", step)
+        # print("input: ", input.shape)
+        # print("memory: ", memory.shape)
+        # np.save(f"./tensorrt_onnx/data_save/input_{step}.npy", input.cpu().numpy())
+        # np.save(f"./tensorrt_onnx/data_save/memory_{step}.npy", memory.cpu().numpy())
+
+
         max_len = memory.size(1)
 
         input = self.prenet(input)
-        input = torch.cat([memory[:, step : step + 1, :], input], dim=-1)
+        # print(input)
+        input = torch.cat([memory_step, input], dim=-1)
+
+        # np.save(f"./tensorrt_onnx/data_save/input_memory_cat_{step}.npy", input.cpu().numpy())
+
         input = self.dec_in_proj(input)
 
         input *= self.d_model ** 0.5
         input = F.dropout(input, p=self.dropout, training=self.training)
 
-        pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(
-            input.device, max_len, x_band_width, h_band_width, mask
-        )
+        # np.save(f"./tensorrt_onnx/data_save/input_tmp_{step}.npy", input.cpu().numpy())
+
+        # print("max_len, x_band_width, h_band_width: ", max_len, x_band_width, h_band_width)
+        # pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(
+        #     input.device, max_len, x_band_width, h_band_width, mask
+        # )
+        # np.save(f"./tensorrt_onnx/data_save/x_band_width_{step}.npy", pnca_x_attn_mask.cpu().numpy())
+        # print(pnca_attn_mask)
+        # print(pnca_x_attn_mask.shape)
+        # print(pnca_h_attn_mask.shape)
 
         dec_pnca_attn_x_list = []
         dec_pnca_attn_h_list = []
         dec_output = input
+        # print("step: ", step)
+
+        pre_x_k_list = []
+        pre_x_v_list = []
         for id, layer in enumerate(self.pnca):
-            if mask is not None:
-                mask_step = mask[:, step : step + 1]
-            else:
-                mask_step = None
-            dec_output, dec_pnca_attn_x, dec_pnca_attn_h = layer(
+            # if mask is not None:
+            #     mask_step = mask[:, step : step + 1]
+            # else:
+            # mask_step = None
+            # print("dec_output: ", dec_output.shape)
+            # print("pnca id: ", id)
+            # print("pnca_x_attn_mask_step: ", pnca_x_attn_mask_step.shape)
+            dec_output, dec_pnca_attn_x, dec_pnca_attn_h, pre_x_k, pre_x_v = layer(
                 dec_output,
                 memory,
-                mask=mask_step,
-                pnca_x_attn_mask=pnca_x_attn_mask[:, step : step + 1, : (step + 1)],
-                pnca_h_attn_mask=pnca_h_attn_mask[:, step : step + 1, :],
+                mask=None,
+                pnca_x_attn_mask=pnca_x_attn_mask_step,
+                pnca_h_attn_mask=pnca_h_attn_mask_step,
+                step=step, puca_id=id
             )
+
+            # print("pre_x_k, pre_x_v: ", pre_x_k.shape, pre_x_v.shape)
+
+            pre_x_k_list += [pre_x_k]
+            pre_x_v_list += [pre_x_v]
+
+            # np.save(f"./tensorrt_onnx/data_save/dec_output_{step}_{id}.npy", dec_output.detach().cpu().numpy())
+            # np.save(f"./tensorrt_onnx/data_save/dec_pnca_attn_x_{step}_{id}.npy", dec_pnca_attn_x.detach().cpu().numpy())
+            # np.save(f"./tensorrt_onnx/data_save/dec_pnca_attn_h_{step}_{id}.npy", dec_pnca_attn_h.detach().cpu().numpy())
+
+
             if return_attns:
                 dec_pnca_attn_x_list += [dec_pnca_attn_x]
                 dec_pnca_attn_h_list += [dec_pnca_attn_h]
@@ -251,7 +296,9 @@ class HybridAttentionDecoder(nn.Module):
         dec_output = self.ln(dec_output)
         dec_output = self.dec_out_proj(dec_output)
 
-        return dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list
+        # np.save(f"./tensorrt_onnx/data_save/dec_output_{step}.npy", dec_output.detach().cpu().numpy())
+
+        return dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list, pre_x_k_list, pre_x_v_list
 
 
 class TextFftEncoder(nn.Module):
@@ -502,6 +549,9 @@ class VarianceAdaptor(nn.Module):
         )
 
 
+#
+
+
 class MelPNCADecoder(nn.Module):
     def __init__(self, config):
         super(MelPNCADecoder, self).__init__()
@@ -542,6 +592,32 @@ class MelPNCADecoder(nn.Module):
             dropout_relu,
             d_mel * outputs_per_step,
         )
+        self.infer_type = config["infer_type"]
+        if self.infer_type == "trt":
+            self.trt_model = config['trt_model']
+
+
+    def get_pnca_attn_mask(self, max_len, x_band_width, h_band_width, mask=None):
+        if mask is not None:
+            pnca_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
+        else:
+            pnca_attn_mask = None
+
+        range_ = torch.arange(max_len)
+        x_start = torch.clamp_min(range_ - x_band_width, 0)[None, None, :]
+        x_end = (range_ + 1)[None, None, :]
+        h_start = range_[None, None, :]
+        h_end = torch.clamp_max(range_ + h_band_width + 1, max_len + 1)[None, None, :]
+
+        pnca_x_attn_mask = ~(
+                (x_start <= range_[None, :, None]) & (x_end > range_[None, :, None])
+        ).transpose(1, 2)
+        pnca_h_attn_mask = ~(
+                (h_start <= range_[None, :, None]) & (h_end > range_[None, :, None])
+        ).transpose(1, 2)
+        return pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask
+
+
 
     def forward(
         self,
@@ -552,23 +628,27 @@ class MelPNCADecoder(nn.Module):
         mask=None,
         return_attns=False,
     ):
+        # print(memory.shape)
+        # print(x_band_width, h_band_width)
+
         batch_size = memory.size(0)
         go_frame = torch.zeros((batch_size, 1, self.d_mel)).to(memory.device)
 
         if target is not None:
-            self.mel_dec.reset_state()
-            input = target[:, self.r - 1 :: self.r, :]
-            input = torch.cat([go_frame, input], dim=1)[:, :-1, :]
-            t0 = time.time()
-            dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list = self.mel_dec(
-                input,
-                memory,
-                x_band_width,
-                h_band_width,
-                mask=mask,
-                return_attns=return_attns,
-            )
-            t1 = time.time()
+            pass
+            # self.mel_dec.reset_state()
+            # input = target[:, self.r - 1 :: self.r, :]
+            # input = torch.cat([go_frame, input], dim=1)[:, :-1, :]
+            # t0 = time.time()
+            # dec_output, dec_pnca_attn_x_list, dec_pnca_attn_h_list = self.mel_dec(
+            #     input,
+            #     memory,
+            #     x_band_width,
+            #     h_band_width,
+            #     mask=mask,
+            #     return_attns=return_attns,
+            # )
+            # t1 = time.time()
             # print("mel_dec infer time: ", t1-t0, " s")
 
         else:
@@ -579,22 +659,144 @@ class MelPNCADecoder(nn.Module):
             input = go_frame
             t0 = time.time()
 
+            max_len = memory.size(1)
+            # x_band_width = 6
+            # h_band_width = 6
+            pre_x_k_list, pre_x_v_list = [], []
+            pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(max_len, x_band_width, h_band_width)
+
             for step in range(memory.size(1)):
-                # print(step, input.shape, memory.shape, x_band_width, h_band_width, mask, return_attns)
-                t0 = time.time()
-                (
-                    dec_output_step,
-                    dec_pnca_attn_x_step,
-                    dec_pnca_attn_h_step,
-                ) = self.mel_dec(
-                    step,
-                    input,
-                    memory,
-                    x_band_width,
-                    h_band_width,
-                    mask=mask,
-                    return_attns=return_attns,
-                )
+
+                memory_step = memory[:, step: step + 1, :]
+
+                pnca_x_attn_mask_step = pnca_x_attn_mask[:, step: step + 1, : (step + 1)]
+                pnca_x_attn_mask_step = pnca_x_attn_mask_step.cuda()
+                # print("pnca_x_attn_mask_step: ", pnca_x_attn_mask_step.shape)
+                pnca_h_attn_mask_step = pnca_h_attn_mask[:, step : step + 1, :]
+                pnca_h_attn_mask_step = pnca_h_attn_mask_step.cuda()
+
+
+                if step == 0:
+
+                    (
+                        dec_output_step,
+                        dec_pnca_attn_x_step,
+                        dec_pnca_attn_h_step,
+                        pre_x_k_list, pre_x_v_list
+                    ) = self.mel_dec(
+                        step,
+                        input,
+                        memory,
+                        memory_step,
+                        pnca_x_attn_mask_step,
+                        pnca_h_attn_mask_step,
+                        mask=mask,
+                        return_attns=return_attns,
+                    )
+
+                    # trt infer
+                    # output_trt = model({"input": input, "memory": memory, "memory_step": memory_step,
+                    #                     "pnca_x_attn_mask_step": pnca_x_attn_mask_step.long(),
+                    #                     "pnca_h_attn_mask_step": pnca_h_attn_mask_step.long()})
+                    # dec_output_step = output_trt['output']
+                    # dec_pnca_attn_x_step = []
+                    # dec_pnca_attn_h_step = []
+                    # for i in range(12):
+                    #     dec_pnca_attn_x_step += [output_trt[f'dec_pnca_attn_x_{i}']]
+                    #     dec_pnca_attn_h_step += [output_trt[f'dec_pnca_attn_h_{i}']]
+
+                else:
+                    if self.infer_type == "torch":
+                        # print("infer using torch.")
+                        (
+                            dec_output_step,
+                            dec_pnca_attn_x_step,
+                            dec_pnca_attn_h_step,
+                            pre_x_k_list, pre_x_v_list
+                        ) = self.mel_dec(
+                            step,
+                            input,
+                            memory,
+                            memory_step,
+                            pnca_x_attn_mask_step,
+                            pnca_h_attn_mask_step,
+                            mask=mask,
+                            return_attns=return_attns,
+                        )
+                    elif self.infer_type == "trt":
+                        # print("infer using trt.")
+
+                        pnca_x_attn_mask_step_ = pnca_x_attn_mask_step.repeat(8, 1, 1)
+                        pnca_h_attn_mask_step_ = pnca_h_attn_mask_step.repeat(8, 1, 1)
+
+                        pnca_x_attn_mask_step_part1 = pnca_x_attn_mask_step_[:, :, :-1]
+                        pnca_x_attn_mask_step_part2 = pnca_x_attn_mask_step_[:, :, -1:]
+                        # print(pnca_x_attn_mask_step_part1.shape, pnca_x_attn_mask_step_part2.shape)
+                        #
+                        # print(step,
+                        #     input.shape,
+                        #     memory.shape,
+                        #     memory_step.shape,
+                        #     pnca_x_attn_mask_step.shape,
+                        #     pnca_h_attn_mask_step.shape,)
+
+                        pre_x_k_merge = None
+                        pre_x_v_merge = None
+                        for i in range(len(pre_x_k_list)):
+                            if i == 0:
+                                pre_x_k_merge = pre_x_k_list[i]
+                                pre_x_v_merge = pre_x_v_list[i]
+                            else:
+                                pre_x_k_merge = torch.cat([pre_x_k_merge, pre_x_k_list[i]], dim=0)
+                                pre_x_v_merge = torch.cat([pre_x_v_merge, pre_x_v_list[i]], dim=0)
+                            # print(pre_x_k_merge.shape)
+                            # print(pre_x_v_merge.shape)
+
+                        output_trt = self.trt_model({"input": input, "memory": memory, "memory_step": memory_step,
+                                            "pnca_x_attn_mask_step_part1": pnca_x_attn_mask_step_part1.float(),
+                                            "pnca_x_attn_mask_step_part2": pnca_x_attn_mask_step_part2.float(),
+                                            "pnca_h_attn_mask_step": pnca_h_attn_mask_step_.float(),
+                                            "pre_x_k": pre_x_k_merge,
+                                            "pre_x_v": pre_x_v_merge})
+
+                        dec_output_step = output_trt['output']
+                        dec_pnca_attn_x_step = []
+                        dec_pnca_attn_h_step = []
+                        for i in range(12):
+                            dec_pnca_attn_x_step += [output_trt[f'dec_pnca_attn_x_{i}']]
+                            dec_pnca_attn_h_step += [output_trt[f'dec_pnca_attn_h_{i}']]
+
+                        pre_x_k_list = []
+                        pre_x_v_list = []
+                        for i in range(12):
+                            pre_x_k_list += [output_trt[f'x_k_{i}']]
+                            pre_x_v_list += [output_trt[f'x_v_{i}']]
+                    else:
+                        print("sambert wrong infer type!!!!!!!!!!!!")
+
+
+
+
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_input.npy",
+                    #                  input.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_memory.npy",
+                    #         memory.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_memory_step.npy",
+                    #         memory_step.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_pnca_x_attn_mask_step_part1.npy",
+                    #         pnca_x_attn_mask_step_part1.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_pnca_x_attn_mask_step_part2.npy",
+                    #         pnca_x_attn_mask_step_part2.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_pnca_h_attn_mask_step.npy",
+                    #         pnca_h_attn_mask_step_.detach().cpu().numpy())
+                    #
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_pre_x_k.npy",
+                    #         pre_x_k_merge.detach().cpu().numpy())
+                    # np.save(f"./tensorrt_onnx/data_save/step_{step}_pre_x_v.npy",
+                    #         pre_x_v_merge.detach().cpu().numpy())
+
+
+
                 input = dec_output_step[:, :, -self.d_mel :]
 
                 dec_output.append(dec_output_step)

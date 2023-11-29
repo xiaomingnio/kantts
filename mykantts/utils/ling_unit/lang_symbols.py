@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from kantts.preprocess.languages import languages
+from mykantts.preprocess.languages import languages
 import logging
 import os
 

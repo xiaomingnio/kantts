@@ -13,7 +13,7 @@ ROOT_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # NOQA:
 sys.path.insert(0, os.path.dirname(ROOT_PATH))  # NOQA: E402
 
 try:
-    from kantts.utils.log import logging_to_file
+    from mykantts.utils.log import logging_to_file
 except ImportError:
     raise ImportError("Please install kantts.")
 
@@ -38,7 +38,7 @@ def load_model(ckpt, config=None):
             config = yaml.load(f, Loader=yaml.Loader)
 
     # lazy load for circular error
-    from kantts.models.hifigan.hifigan import Generator
+    from mykantts.models.hifigan.hifigan import Generator
     print("------- config -----------")
     print(config["Model"]["Generator"]["params"])
     model = Generator(**config["Model"]["Generator"]["params"])

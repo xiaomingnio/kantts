@@ -2,7 +2,7 @@ import torch
 import onnx
 import tensorrt as trt
 
-onnx_model = './model_save/simplify_model_zhitian_emo.onnx'
+onnx_model = './model_save/simplify_model_zhizhe_emo.onnx'
 save_path = onnx_model[:-5] + ".engine"
 print(save_path)
 

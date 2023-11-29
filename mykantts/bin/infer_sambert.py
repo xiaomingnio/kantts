@@ -6,13 +6,14 @@ import argparse
 import yaml
 import logging
 import time
+from tensorrt_onnx.run_trt import TRTWrapper
 
 ROOT_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # NOQA: E402
 sys.path.insert(0, os.path.dirname(ROOT_PATH))  # NOQA: E402
 
 
-from kantts.models import model_builder
-from kantts.utils.ling_unit.ling_unit import KanTtsLinguisticUnit
+from mykantts.models import model_builder
+from mykantts.utils.ling_unit.ling_unit import KanTtsLinguisticUnit
 
 
 logging.basicConfig(
@@ -157,7 +158,7 @@ def am_synthesis(symbol_seq, fsnet, ling_unit, device, se=None, scale=1.0):
     )
 
 
-def am_init(ckpt, config=None):
+def am_init(ckpt, config=None, infer_type="torch", voice=''):
     if not torch.cuda.is_available():
         device = torch.device("cpu")
     else:
@@ -177,6 +178,12 @@ def am_init(ckpt, config=None):
     ling_unit = KanTtsLinguisticUnit(config)
     ling_unit_size = ling_unit.get_unit_size()
     config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
+
+    config["Model"]["KanTtsSAMBERT"]["params"]['infer_type'] = infer_type
+    if infer_type == "trt":
+        config["Model"]["KanTtsSAMBERT"]["params"]['trt_model'] = TRTWrapper(f'./tensorrt_onnx/model_save/mel_decode_{voice}.engine')
+        logging.info(f"Loading sambert engine: ./tensorrt_onnx/model_save/mel_decode_{voice}.engine")
+    # print("config.infer_type: ", config["Model"]["KanTtsSAMBERT"]["params"]['infer_type'])
 
     model, _, _ = model_builder(config, device)
 
