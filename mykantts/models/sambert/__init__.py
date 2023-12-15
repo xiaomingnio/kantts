@@ -326,7 +326,7 @@ class MultiHeadPNCAAttention(nn.Module):
         self.x_v = None
         self.x_state_size = 0
 
-    def forward(self, x, h, mask_x=None, mask_h=None, step=0, puca_id=0):
+    def forward(self, x, h, mask_x=None, mask_h=None, step=0, puca_id=0, batch_size=1):
         # print(f"step: {step}, puca_id: {puca_id}")
         residual = x
         # print("self.h_state_size: ", self.h_state_size)
@@ -353,7 +353,7 @@ class MultiHeadPNCAAttention(nn.Module):
         # X
         if mask_x is not None:
             # print("mask_x.shape: ", mask_x.shape)
-            mask_x = mask_x.repeat(n_head, 1, 1)  # (n*b) x .. x ..
+            mask_x = mask_x.repeat(n_head* batch_size, 1, 1)  # (n*b) x .. x ..
             # print("mask_x.shape: ", mask_x.shape)
 
         # print("--------attention x ------------")
@@ -375,7 +375,7 @@ class MultiHeadPNCAAttention(nn.Module):
         #         output_x.detach().cpu().numpy())
         # H
         if mask_h is not None:
-            mask_h = mask_h.repeat(n_head, 1, 1)
+            mask_h = mask_h.repeat(n_head* batch_size, 1, 1)
         # print("--------attention h ------------")
         output_h, attn_h = self.attention(x_q, self.h_k, self.h_v, mask=mask_h, step=step, puca_id= puca_id, flag=False)
         # np.save(f"./tensorrt_onnx/data_save/step_{step}_puca_id_{puca_id}_output_h.npy", output_h.detach().cpu().numpy())
@@ -430,7 +430,7 @@ class PNCABlock(nn.Module):
         )
 
     def forward(
-        self, input, memory, mask=None, pnca_x_attn_mask=None, pnca_h_attn_mask=None, step=0, puca_id=0
+        self, input, memory, mask=None, pnca_x_attn_mask=None, pnca_h_attn_mask=None, step=0, puca_id=0,batch_size=1
     ):
         # print("mask: ", mask)
         # print("pnca_x_attn_mask: ", pnca_x_attn_mask.shape)
@@ -438,7 +438,7 @@ class PNCABlock(nn.Module):
 
         #  here 进行中..................
         output, pnca_attn_x, pnca_attn_h = self.pnca_attn(
-            input, memory, pnca_x_attn_mask, pnca_h_attn_mask, step=step, puca_id=puca_id
+            input, memory, pnca_x_attn_mask, pnca_h_attn_mask, step=step, puca_id=puca_id,batch_size=batch_size
         )
 
         # np.save(f"./tensorrt_onnx/data_save/step_{step}_puca_id_{puca_id}_pnca_attn_output.npy",
