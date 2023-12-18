@@ -8,12 +8,12 @@ import torch
 
 from tensorrt_onnx.run_onnx import ONNXModel
 from tensorrt_onnx.run_trt import TRTWrapper
-from mykantts.bin.infer_sambert import am_init, am_synthesis, am_synthesis_batch
+from mykantts.bin.infer_sambert import am_init, am_synthesis
 from mykantts.bin.infer_hifigan import hifigan_init
 from mykantts.utils.ling_unit.ling_unit import KanTtsLinguisticUnit
 import time
 import wave
-from modelscope.utils.audio.audio_utils import (ndarray_pcm_to_wav)
+
 import ttsfrd
 import logging
 
@@ -52,7 +52,6 @@ def text_to_mit_symbols1(text, fe, speaker):
 
     return symbols_lst
 
-
 def save_wav(data, out_path):
     with wave.open(out_path, 'w') as wav_file:
         wav_file.setnchannels(1)  # 单声道
@@ -64,7 +63,6 @@ def save_wav(data, out_path):
 
         # 写入数据
         wav_file.writeframes(data.tobytes())
-
 
 class TTS():
     def __init__(self, basepath, voice, infer_type):
@@ -78,6 +76,7 @@ class TTS():
 
         self.output_dir = r"./outputs"
 
+
         with open(self.am_config, "r") as f:
             self.config = yaml.load(f, Loader=yaml.Loader)
 
@@ -86,7 +85,7 @@ class TTS():
         logging.info(f"HifiGAN infer using : {infer_type}.......")
         if infer_type == "torch":
             self.hifigan_model = hifigan_init(ckpt_path=os.path.join(self.voc_ckpt, "ckpt/checkpoint_0.pth"),
-                                              config=self.voc_config)
+                                         config=self.voc_config)
             p = os.path.join(self.voc_ckpt, "ckpt/checkpoint_0.pth")
             logging.info(f"Loading HifiGAN checkpoint: {p}")
         elif infer_type == "onnx_cpu":
@@ -101,8 +100,7 @@ class TTS():
         else:
             print("Wrong infer type......")
 
-        self.am_model = am_init(ckpt=os.path.join(self.am_ckpt, "ckpt/checkpoint_0.pth"), config=self.am_config,
-                                infer_type=infer_type, voice=voice)
+        self.am_model = am_init(ckpt=os.path.join(self.am_ckpt, "ckpt/checkpoint_0.pth"), config=self.am_config, infer_type=infer_type, voice=voice)
 
         self.fe = ttsfrd.TtsFrontendEngine()
         self.fe.initialize(self.resource_dir)
@@ -129,6 +127,7 @@ class TTS():
         wav_concat = np.concatenate((wav_concat, np.zeros(end_sil_samples)), axis=0)
         save_wav(wav_concat, os.path.join(output_dir, f"all.wav"))
 
+
     def infer(self, text, scale=1.0):
         # t0 = time.time()
         self.output_dir = "./outputs/" + str(uuid.uuid4())
@@ -138,12 +137,13 @@ class TTS():
         t0 = time.time()
         symbols_lst = text_to_mit_symbols1(text, self.fe, self.speaker)
         t1 = time.time()
-        print("文本前端推理时间: ", (t1 - t0) * 1000, " ms")
+        print("文本前端推理时间: ", (t1-t0)*1000, " ms")
 
         symbols_file = os.path.join(self.output_dir, "symbols.lst")
         with open(symbols_file, "w") as symbol_data:
             for symbol in symbols_lst:
                 symbol_data.write(symbol)
+
 
         with open(self.am_config, "r") as f:
             config = yaml.load(f, Loader=yaml.Loader)
@@ -173,7 +173,7 @@ class TTS():
                         line[1], self.am_model, ling_unit, device, se=None, scale=scale
                     )
                 t1 = time.time()
-                # print("am infer time: ", (t1 - t0) * 1000, " ms")
+                print("am infer time: ", (t1-t0)*1000, " ms")
                 # (T, C) -> (B, C, T)
                 mel_data = mel_post.transpose(1, 0).unsqueeze(0)
 
@@ -198,13 +198,15 @@ class TTS():
                 # y = y.view(-1).detach().cpu().numpy()
                 # pcm_len += len(y)
                 t2 = time.time()
-                # print("hifigan infer time: ", (t2 - t1) * 1000, " ms")
+                print("hifigan infer time: ", (t2-t1)*1000, " ms")
                 # print(y)
 
                 save_wav(y, os.path.join(self.output_dir, f"{i}_gen.wav"))
 
+
         # t1 = time.time()
         # print("文本前端infer time: ", t1-t0)
+
 
         # t0 = time.time()
         # logging.info("AM is infering...")
@@ -227,53 +229,4 @@ class TTS():
         # t1 = time.time()
         # print("infer time: ", t1-t0)
 
-        return self.output_dir
-
-    def infer_batch(self, text, scale=1.0):
-        start_time = time.time()
-        symbols_lst = text_to_mit_symbols1(text, self.fe, self.speaker)
-        front_time = (time.time() - start_time) * 1000
-        print("文本前端推理时间: ", front_time, " ms")
-        with open(self.am_config, "r") as f:
-            config = yaml.load(f, Loader=yaml.Loader)
-        ling_unit = KanTtsLinguisticUnit(config)
-        ling_unit_size = ling_unit.get_unit_size()
-        config["Model"]["KanTtsSAMBERT"]["params"].update(ling_unit_size)
-        if not torch.cuda.is_available():
-            device = torch.device("cpu")
-        else:
-            torch.backends.cudnn.benchmark = True
-            device = torch.device("cuda", 0)
-        audio_total = np.empty((0), dtype='int16')
-        voc_time_total = 0.0
-        symbols_lst_batch_input = []
-        for line in symbols_lst:
-            line = line.strip().split("\t")
-            symbols_lst_batch_input.append(line[1])
-        t0 = time.time()
-        res_list = am_synthesis_batch(symbols_lst_batch_input, self.am_model, ling_unit, device, se=None, scale=scale)
-        am_time_total = (time.time() - t0) * 1000
-        print("am", am_time_total, "ms")
-        for mel_post in res_list:
-            t1 = time.time()
-            mel_data = mel_post.transpose(1, 0).unsqueeze(0)
-            if self.infer_type == "torch":
-                y = self.hifigan_model(mel_data)
-                y = y.view(-1).detach().cpu().numpy()
-            elif self.infer_type in ["onnx_cpu", "onnx_gpu"]:
-                out_onnx = self.hifigan_model.onnx_session.run([], input_feed={'input': mel_data.cpu().numpy()})
-                y = np.squeeze(out_onnx[0])
-            elif self.infer_type == 'trt':
-                output = self.hifigan_model(dict(input=mel_data.cuda()))
-                y = output['output'].view(-1).detach().cpu().numpy()
-                y = y * 32768
-                audio_total = np.append(audio_total, y.astype('int16'), axis=0)
-            t2 = time.time()
-            voc_time_total += ((t2 - t1) * 1000)
-            # print("hifigan infer time: ", (t2 - t1) * 1000, " ms")
-        audio_bytes = ndarray_pcm_to_wav(24000, audio_total)
-        with open("./batch_infer_result.wav", "wb") as f:
-            f.write(audio_bytes)
-        print("total=%.2f ms, front=%.2f ms, am=%.2f ms, voc=%.2f ms " % (
-        (time.time() - start_time) * 1000, front_time, am_time_total, voc_time_total))
         return self.output_dir

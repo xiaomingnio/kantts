@@ -23,17 +23,17 @@ from mykantts.models.utils import get_mask_from_lengths
 
 class SelfAttentionEncoder(nn.Module):
     def __init__(
-            self,
-            n_layer,
-            d_in,
-            d_model,
-            n_head,
-            d_head,
-            d_inner,
-            dropout,
-            dropout_att,
-            dropout_relu,
-            position_encoder,
+        self,
+        n_layer,
+        d_in,
+        d_model,
+        n_head,
+        d_head,
+        d_inner,
+        dropout,
+        dropout_att,
+        dropout_relu,
+        position_encoder,
     ):
         super(SelfAttentionEncoder, self).__init__()
 
@@ -91,19 +91,19 @@ class SelfAttentionEncoder(nn.Module):
 
 class HybridAttentionDecoder(nn.Module):
     def __init__(
-            self,
-            d_in,
-            prenet_units,
-            n_layer,
-            d_model,
-            d_mem,
-            n_head,
-            d_head,
-            d_inner,
-            dropout,
-            dropout_att,
-            dropout_relu,
-            d_out,
+        self,
+        d_in,
+        prenet_units,
+        n_layer,
+        d_model,
+        d_mem,
+        n_head,
+        d_head,
+        d_inner,
+        dropout,
+        dropout_att,
+        dropout_relu,
+        d_out,
     ):
         super(HybridAttentionDecoder, self).__init__()
 
@@ -138,7 +138,7 @@ class HybridAttentionDecoder(nn.Module):
             layer.reset_state()
 
     def get_pnca_attn_mask(
-            self, device, max_len, x_band_width, h_band_width, mask=None
+        self, device, max_len, x_band_width, h_band_width, mask=None
     ):
         if mask is not None:
             pnca_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
@@ -152,10 +152,10 @@ class HybridAttentionDecoder(nn.Module):
         h_end = torch.clamp_max(range_ + h_band_width + 1, max_len + 1)[None, None, :]
 
         pnca_x_attn_mask = ~(
-                (x_start <= range_[None, :, None]) & (x_end > range_[None, :, None])
+            (x_start <= range_[None, :, None]) & (x_end > range_[None, :, None])
         ).transpose(1, 2)
         pnca_h_attn_mask = ~(
-                (h_start <= range_[None, :, None]) & (h_end > range_[None, :, None])
+            (h_start <= range_[None, :, None]) & (h_end > range_[None, :, None])
         ).transpose(1, 2)
 
         # if pnca_attn_mask is not None:
@@ -212,16 +212,16 @@ class HybridAttentionDecoder(nn.Module):
 
     # must call reset_state before when step == 0
     def forward(
-            self,
-            step,
-            input,
-            memory,
-            memory_step,
-            pnca_x_attn_mask_step,
-            pnca_h_attn_mask_step,
-            mask=None,
-            return_attns=False,
-            batch_size=1
+        self,
+        step,
+        input,
+        memory,
+        memory_step,
+        pnca_x_attn_mask_step,
+        pnca_h_attn_mask_step,
+        mask=None,
+        return_attns=False,
+
     ):
 
         # print("step: ", step)
@@ -229,6 +229,7 @@ class HybridAttentionDecoder(nn.Module):
         # print("memory: ", memory.shape)
         # np.save(f"./tensorrt_onnx/data_save/input_{step}.npy", input.cpu().numpy())
         # np.save(f"./tensorrt_onnx/data_save/memory_{step}.npy", memory.cpu().numpy())
+
 
         max_len = memory.size(1)
 
@@ -275,7 +276,7 @@ class HybridAttentionDecoder(nn.Module):
                 mask=None,
                 pnca_x_attn_mask=pnca_x_attn_mask_step,
                 pnca_h_attn_mask=pnca_h_attn_mask_step,
-                step=step, puca_id=id, batch_size=batch_size,
+                step=step, puca_id=id
             )
 
             # print("pre_x_k, pre_x_v: ", pre_x_k.shape, pre_x_v.shape)
@@ -286,6 +287,7 @@ class HybridAttentionDecoder(nn.Module):
             # np.save(f"./tensorrt_onnx/data_save/dec_output_{step}_{id}.npy", dec_output.detach().cpu().numpy())
             # np.save(f"./tensorrt_onnx/data_save/dec_pnca_attn_x_{step}_{id}.npy", dec_pnca_attn_x.detach().cpu().numpy())
             # np.save(f"./tensorrt_onnx/data_save/dec_pnca_attn_h_{step}_{id}.npy", dec_pnca_attn_h.detach().cpu().numpy())
+
 
             if return_attns:
                 dec_pnca_attn_x_list += [dec_pnca_attn_x]
@@ -370,7 +372,7 @@ class TextFftEncoder(nn.Module):
             ws_embedding = self.ws_emb(inputs_ws)
 
             ling_embedding = (
-                    sy_embedding + tone_embedding + syllable_flag_embedding + ws_embedding
+                sy_embedding + tone_embedding + syllable_flag_embedding + ws_embedding
             )
 
         enc_output, enc_slf_attn_list = self.ling_enc(
@@ -388,9 +390,9 @@ class VarianceAdaptor(nn.Module):
         super(VarianceAdaptor, self).__init__()
 
         input_dim = (
-                config["encoder_projection_units"]
-                + config["emotion_units"]
-                + config["speaker_units"]
+            config["encoder_projection_units"]
+            + config["emotion_units"]
+            + config["speaker_units"]
         )
         filter_size = config["predictor_filter_size"]
         fsmn_num_layers = config["predictor_fsmn_num_layers"]
@@ -440,16 +442,16 @@ class VarianceAdaptor(nn.Module):
         )
 
     def forward(
-            self,
-            inputs_text_embedding,
-            inputs_emo_embedding,
-            inputs_spk_embedding,
-            scale=1.0,
-            masks=None,
-            output_masks=None,
-            duration_targets=None,
-            pitch_targets=None,
-            energy_targets=None,
+        self,
+        inputs_text_embedding,
+        inputs_emo_embedding,
+        inputs_spk_embedding,
+        scale=1.0,
+        masks=None,
+        output_masks=None,
+        duration_targets=None,
+        pitch_targets=None,
+        energy_targets=None,
     ):
 
         batch_size = inputs_text_embedding.size(0)
@@ -480,7 +482,7 @@ class VarianceAdaptor(nn.Module):
             ).transpose(1, 2)
 
         inputs_text_embedding_aug = (
-                inputs_text_embedding + pitch_embeddings + energy_embeddings
+            inputs_text_embedding + pitch_embeddings + energy_embeddings
         )
         duration_predictor_cond = torch.cat(
             [inputs_text_embedding_aug, inputs_spk_embedding, inputs_emo_embedding],
@@ -508,30 +510,30 @@ class VarianceAdaptor(nn.Module):
 
         if duration_targets is not None:
             LR_text_outputs, LR_length_rounded = self.length_regulator(
-                inputs_text_embedding_aug, duration_targets * scale, masks=output_masks
+                inputs_text_embedding_aug, duration_targets*scale, masks=output_masks
             )
             LR_position_embeddings = self.dur_position_encoder(
                 duration_targets, masks=output_masks
             )
             LR_emo_outputs, _ = self.length_regulator(
-                inputs_emo_embedding, duration_targets * scale, masks=output_masks
+                inputs_emo_embedding, duration_targets*scale, masks=output_masks
             )
             LR_spk_outputs, _ = self.length_regulator(
-                inputs_spk_embedding, duration_targets * scale, masks=output_masks
+                inputs_spk_embedding, duration_targets*scale, masks=output_masks
             )
 
         else:
             LR_text_outputs, LR_length_rounded = self.length_regulator(
-                inputs_text_embedding_aug, duration_predictions * scale, masks=output_masks
+                inputs_text_embedding_aug, duration_predictions*scale, masks=output_masks
             )
             LR_position_embeddings = self.dur_position_encoder(
-                duration_predictions * scale, masks=output_masks
+                duration_predictions*scale, masks=output_masks
             )
             LR_emo_outputs, _ = self.length_regulator(
-                inputs_emo_embedding, duration_predictions * scale, masks=output_masks
+                inputs_emo_embedding, duration_predictions*scale, masks=output_masks
             )
             LR_spk_outputs, _ = self.length_regulator(
-                inputs_spk_embedding, duration_predictions * scale, masks=output_masks
+                inputs_spk_embedding, duration_predictions*scale, masks=output_masks
             )
 
         LR_text_outputs = LR_text_outputs + LR_position_embeddings
@@ -566,9 +568,9 @@ class MelPNCADecoder(nn.Module):
         outputs_per_step = config["outputs_per_step"]
 
         d_mem = (
-                config["encoder_projection_units"] * outputs_per_step
-                + config["emotion_units"]
-                + config["speaker_units"]
+            config["encoder_projection_units"] * outputs_per_step
+            + config["emotion_units"]
+            + config["speaker_units"]
         )
         d_mel = config["num_mels"]
 
@@ -594,6 +596,7 @@ class MelPNCADecoder(nn.Module):
         if self.infer_type == "trt":
             self.trt_model = config['trt_model']
 
+
     def get_pnca_attn_mask(self, max_len, x_band_width, h_band_width, mask=None):
         if mask is not None:
             pnca_attn_mask = mask.unsqueeze(1).expand(-1, max_len, -1)
@@ -614,14 +617,16 @@ class MelPNCADecoder(nn.Module):
         ).transpose(1, 2)
         return pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask
 
+
+
     def forward(
-            self,
-            memory,
-            x_band_width,
-            h_band_width,
-            target=None,
-            mask=None,
-            return_attns=False,
+        self,
+        memory,
+        x_band_width,
+        h_band_width,
+        target=None,
+        mask=None,
+        return_attns=False,
     ):
         # print(memory.shape)
         # print(x_band_width, h_band_width)
@@ -658,8 +663,7 @@ class MelPNCADecoder(nn.Module):
             # x_band_width = 6
             # h_band_width = 6
             pre_x_k_list, pre_x_v_list = [], []
-            pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(max_len, x_band_width,
-                                                                                         h_band_width)
+            pnca_attn_mask, pnca_x_attn_mask, pnca_h_attn_mask = self.get_pnca_attn_mask(max_len, x_band_width, h_band_width)
 
             for step in range(memory.size(1)):
 
@@ -668,8 +672,9 @@ class MelPNCADecoder(nn.Module):
                 pnca_x_attn_mask_step = pnca_x_attn_mask[:, step: step + 1, : (step + 1)]
                 pnca_x_attn_mask_step = pnca_x_attn_mask_step.cuda()
                 # print("pnca_x_attn_mask_step: ", pnca_x_attn_mask_step.shape)
-                pnca_h_attn_mask_step = pnca_h_attn_mask[:, step: step + 1, :]
+                pnca_h_attn_mask_step = pnca_h_attn_mask[:, step : step + 1, :]
                 pnca_h_attn_mask_step = pnca_h_attn_mask_step.cuda()
+
 
                 if step == 0:
 
@@ -686,7 +691,7 @@ class MelPNCADecoder(nn.Module):
                         pnca_x_attn_mask_step,
                         pnca_h_attn_mask_step,
                         mask=mask,
-                        return_attns=return_attns, batch_size=batch_size
+                        return_attns=return_attns,
                     )
 
                     # trt infer
@@ -701,8 +706,7 @@ class MelPNCADecoder(nn.Module):
                     #     dec_pnca_attn_h_step += [output_trt[f'dec_pnca_attn_h_{i}']]
 
                 else:
-                    # 当batch大于1时 使用批量推理
-                    if self.infer_type == "torch" or memory.shape[0] > 1:
+                    if self.infer_type == "torch":
                         # print("infer using torch.")
                         (
                             dec_output_step,
@@ -717,7 +721,7 @@ class MelPNCADecoder(nn.Module):
                             pnca_x_attn_mask_step,
                             pnca_h_attn_mask_step,
                             mask=mask,
-                            return_attns=return_attns, batch_size=batch_size
+                            return_attns=return_attns,
                         )
                     elif self.infer_type == "trt":
                         # print("infer using trt.")
@@ -749,11 +753,11 @@ class MelPNCADecoder(nn.Module):
                             # print(pre_x_v_merge.shape)
 
                         output_trt = self.trt_model({"input": input, "memory": memory, "memory_step": memory_step,
-                                                     "pnca_x_attn_mask_step_part1": pnca_x_attn_mask_step_part1.float(),
-                                                     "pnca_x_attn_mask_step_part2": pnca_x_attn_mask_step_part2.float(),
-                                                     "pnca_h_attn_mask_step": pnca_h_attn_mask_step_.float(),
-                                                     "pre_x_k": pre_x_k_merge,
-                                                     "pre_x_v": pre_x_v_merge})
+                                            "pnca_x_attn_mask_step_part1": pnca_x_attn_mask_step_part1.float(),
+                                            "pnca_x_attn_mask_step_part2": pnca_x_attn_mask_step_part2.float(),
+                                            "pnca_h_attn_mask_step": pnca_h_attn_mask_step_.float(),
+                                            "pre_x_k": pre_x_k_merge,
+                                            "pre_x_v": pre_x_v_merge})
 
                         dec_output_step = output_trt['output']
                         dec_pnca_attn_x_step = []
@@ -769,6 +773,9 @@ class MelPNCADecoder(nn.Module):
                             pre_x_v_list += [output_trt[f'x_v_{i}']]
                     else:
                         print("sambert wrong infer type!!!!!!!!!!!!")
+
+
+
 
                     # np.save(f"./tensorrt_onnx/data_save/step_{step}_input.npy",
                     #                  input.detach().cpu().numpy())
@@ -788,11 +795,13 @@ class MelPNCADecoder(nn.Module):
                     # np.save(f"./tensorrt_onnx/data_save/step_{step}_pre_x_v.npy",
                     #         pre_x_v_merge.detach().cpu().numpy())
 
-                input = dec_output_step[:, :, -self.d_mel:]
+
+
+                input = dec_output_step[:, :, -self.d_mel :]
 
                 dec_output.append(dec_output_step)
                 for layer_id, (pnca_x_attn, pnca_h_attn) in enumerate(
-                        zip(dec_pnca_attn_x_step, dec_pnca_attn_h_step)
+                    zip(dec_pnca_attn_x_step, dec_pnca_attn_h_step)
                 ):
                     left = memory.size(1) - pnca_x_attn.size(-1)
                     if left > 0:
@@ -867,11 +876,11 @@ def average_frame_feat(pitch, durs):
     dce = durs_cums_ends[:, None, :].expand(bs, n_formants, lengths)
 
     pitch_sums = (
-            torch.gather(pitch_cums, 2, dce) - torch.gather(pitch_cums, 2, dcs)
+        torch.gather(pitch_cums, 2, dce) - torch.gather(pitch_cums, 2, dcs)
     ).float()
     pitch_nelems = (
-            torch.gather(pitch_nonzero_cums, 2, dce)
-            - torch.gather(pitch_nonzero_cums, 2, dcs)
+        torch.gather(pitch_nonzero_cums, 2, dce)
+        - torch.gather(pitch_nonzero_cums, 2, dcs)
     ).float()
 
     pitch_avg = torch.where(
@@ -970,15 +979,15 @@ class KanTtsSAMBERT(nn.Module):
         return torch.from_numpy(attn_out).to(attn.get_device())
 
     def insert_fp(
-            self,
-            text_hid,
-            FP_p,
-            fp_label,
-            fp_dict,
-            inputs_emotion,
-            inputs_speaker,
-            input_lengths,
-            input_masks,
+        self,
+        text_hid,
+        FP_p,
+        fp_label,
+        fp_dict,
+        inputs_emotion,
+        inputs_speaker,
+        input_lengths,
+        input_masks,
     ):
 
         en, _, _ = self.text_encoder(fp_dict[1], return_attns=True)
@@ -1066,19 +1075,19 @@ class KanTtsSAMBERT(nn.Module):
         return text_hid, inputs_emotion, inputs_speaker, inter_lengths
 
     def forward(
-            self,
-            inputs_ling,
-            inputs_emotion,
-            inputs_speaker,
-            input_lengths,
-            scale=1.0,
-            output_lengths=None,
-            mel_targets=None,
-            duration_targets=None,
-            pitch_targets=None,
-            energy_targets=None,
-            attn_priors=None,
-            fp_label=None,
+        self,
+        inputs_ling,
+        inputs_emotion,
+        inputs_speaker,
+        input_lengths,
+        scale=1.0,
+        output_lengths=None,
+        mel_targets=None,
+        duration_targets=None,
+        pitch_targets=None,
+        energy_targets=None,
+        attn_priors=None,
+        fp_label=None,
 
     ):
         batch_size = inputs_ling.size(0)
@@ -1219,6 +1228,8 @@ class KanTtsSAMBERT(nn.Module):
         # print(dec_outputs, pnca_x_attn_lst, pnca_h_attn_lst)
         # dec_outputs_np = dec_outputs.detach().cpu().numpy()
         # np.save("./save_data/dec_outputs_np.npy", dec_outputs_np)
+
+
 
         t1 = time.time()
         # print("mel_decoder infer time: ", t1 - t0)
