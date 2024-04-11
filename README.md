@@ -1,3 +1,5 @@
+## 目前只支持modelscope里的speech_sambert-hifigan_tts_zh-cn_16k模型，自己利用kantts训练的模型可能在结构上有细微区别，请自行修改。
+
 # kantts
 TTS appalication based on modelscope KAN-TTS
 
